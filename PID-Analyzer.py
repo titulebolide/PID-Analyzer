@@ -38,22 +38,41 @@ class Trace:
     noise_framelen = 0.3    # window width for noise analysis
     noise_superpos = 16     # subsampling for noise analysis windows
 
-    def __init__(self, data):
-        self.data = data
-        self.input = self.equalize(data['time'], self.pid_in(data['p_err'], data['gyro'], data['P']))[1]  # /20.
-        self.data.update({'input': self.pid_in(data['p_err'], data['gyro'], data['P'])})
-        self.equalize_data()
+    def __init__(self, name, time, gyro_rate, gyro_setpoint, throttle,
+                 d_err=None, debug=None):
+        """Initialize a Trace object, that does the analysis for a single axis.
 
-        self.name = self.data['name']
-        self.time = self.data['time']
-        self.dt=self.time[0]-self.time[1]
+        Note: all data arrays must have the same length as time
 
-        self.input = self.data['input']
-        #enable this to generate artifical gyro trace with known system response
-        #self.data['gyro']=self.toy_out(self.input, delay=0.01, mode='normal')####
+        :param name: axis name (e.g. roll)
+        :param time: np array with sampling times [s]
+        :param gyro_rate: np array with the gyro rates [deg/s]
+        :param throttle: np array with the throttle input [0, 100]
 
+        :param d_err: np array with D term error (optional)
+        :param debug: TODO
+        """
+
+        # equally space samples in time
+        data = {
+            'gyro': gyro_rate,
+            'input': gyro_setpoint,
+            'throttle': throttle
+            }
+        if d_err is not None: data['d_err'] = d_err
+        if debug is not None: data['debug'] = debug
+        self.time, self.data = self.equalize_data(time, data)
         self.gyro = self.data['gyro']
+        self.input = self.data['input']
         self.throttle = self.data['throttle']
+        self.dt = self.time[0]-self.time[1]
+
+        self.data['time'] = self.time
+
+        self.name = name
+
+        #enable this to generate artifical gyro trace with known system response
+        #self.gyro=self.toy_out(self.input, delay=0.01, mode='normal')####
         self.throt_hist, self.throt_scale = np.histogram(self.throttle, np.linspace(0, 100, 101, dtype=np.float64), normed=True)
 
         self.flen = self.stepcalc(self.time, Trace.framelen)        # array len corresponding to framelen in s
@@ -111,10 +130,6 @@ class Trace:
         return clipped
 
 
-    def pid_in(self, pval, gyro, pidp):
-        pidin = gyro + pval / (0.032029 * pidp)       # 0.032029 is P scaling factor from betaflight
-        return pidin
-
     def rate_curve(self, rcin, inmax=500., outmax=800., rate=160.):
         ### an estimated rate curve. not used.
         expoin = (np.exp((rcin - inmax) / rate) - np.exp((-rcin - inmax) / rate)) * outmax
@@ -171,21 +186,17 @@ class Trace:
         return toyout+noise_sig
 
 
-    def equalize(self, time, data):
-        ### equalizes time scale
-        data_f = interp1d(time, data)
-        newtime = np.linspace(time[0], time[-1], len(time), dtype=np.float64)
-        return newtime, data_f(newtime)
+    @staticmethod
+    def equalize_data(time, data):
+        """Resample & interpolate all dict elements in data for equal sampling in time
 
-    def equalize_data(self):
-        ### equalizes full dict of data
-        time = self.data['time']
+        :return: tuple of (time, data)
+        """
         newtime = np.linspace(time[0], time[-1], len(time), dtype=np.float64)
-        for key in self.data:
-              if isinstance(self.data[key],np.ndarray):
-                  if len(self.data[key])==len(time):
-                      self.data[key]= interp1d(time, self.data[key])(newtime)
-        self.data['time']=newtime
+        output = {}
+        for key in data:
+            output[key] = interp1d(time, data[key])(newtime)
+        return (newtime, output)
 
 
     def stepcalc(self, time, duration):
@@ -197,7 +208,7 @@ class Trace:
 
     def winstacker(self, stackdict, flen, superpos):
         ### makes stack of windows for deconvolution
-        tlen = len(self.data['time'])
+        tlen = len(self.time)
         shift = int(flen/superpos)
         wins = int(tlen/shift)-superpos
         for i in np.arange(wins):
@@ -255,8 +266,8 @@ class Trace:
         ref = trace_ref[:-int(Trace.noise_superpos * 2. / Trace.noise_framelen), :] * window
         time = time[:-int(Trace.noise_superpos * 2. / Trace.noise_framelen), :]
 
-        full_freq_f, full_spec_f = self.spectrum(self.data['time'], [self.data['gyro']])
-        full_freq_r, full_spec_r = self.spectrum(self.data['time'], [self.data['debug']])
+        full_freq_f, full_spec_f = self.spectrum(self.time, [self.data['gyro']])
+        full_freq_r, full_spec_r = self.spectrum(self.time, [self.data['debug']])
 
         f_amp_freq, f_amp_hist =np.histogram(full_freq_f, weights=np.abs(full_spec_f.real).flatten(), bins=int(full_freq_f[-1]))
         r_amp_freq, r_amp_hist = np.histogram(full_freq_r, weights=np.abs(full_spec_r.real).flatten(), bins=int(full_freq_r[-1]))
@@ -665,11 +676,18 @@ class CSV_log:
         plt.savefig(self.file[:-13] + self.name + '_' + str(self.headdict['logNum'])+'_response.png')
         return fig
 
+    def pid_in(self, pval, gyro, pidp):
+        pidin = gyro + pval / (0.032029 * pidp)       # 0.032029 is P scaling factor from betaflight
+        return pidin
+
     def __analyze(self):
         analyzed = []
         for t in self.traces:
             logging.info(t['name'] + '...   ')
-            analyzed.append(Trace(t))
+            # calculate the gyro setpoint from the gyro, P error and P gain
+            gyro_setpoint = self.pid_in(t['p_err'], t['gyro'], t['P'])
+            analyzed.append(Trace(t['name'], t['time'], t['gyro'],
+                gyro_setpoint, t['throttle'], t['d_err'], t['debug']))
         return analyzed
 
     def readcsv(self, fpath):
