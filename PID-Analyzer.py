@@ -356,6 +356,132 @@ class Trace:
         variance = np.average((values - average) ** 2, axis=0, weights=weights)
         return (average, np.sqrt(variance))
 
+class Plot:
+    def __init__(self, fpath, name, headdict=None):
+        self.file = fpath
+        self.name = name
+        self.headdict = headdict
+
+    def plot_all_responses(self, traces, style='ra'): # style='raw' for response vs. time in color plot
+        """Plot responses for all 3 axis
+
+        :param traces: list of [roll, pitch, yaw] Trace objects
+        """
+        textsize = 7
+        titelsize = 10
+        rcParams.update({'font.size': 9})
+        logging.info('Making PID plot...')
+
+        log_number_str = ''
+        log_number = 0
+        tpa_percent = 100
+        pid_labels = {}
+        if self.headdict is not None:
+            log_number_str = ': Log number: ' + self.headdict['logNum']
+            log_number = self.headdict['logNum']
+            tpa_percent = self.headdict['tpa_percent']
+            for tr in traces:
+                pid_labels[tr.name] = ' PID ' + self.headdict[tr.name + 'PID']
+        else:
+            for tr in traces:
+                pid_labels[tr.name] = ''
+
+        fig = plt.figure('Response plot' + log_number_str + '          '+self.file , figsize=(16, 8))
+        ### gridspec devides window into 24 horizontal, 3*10 vertical fields
+        gs1 = GridSpec(24, 3 * 10, wspace=0.6, hspace=0.7, left=0.04, right=1., bottom=0.05, top=0.97)
+
+        for i, tr in enumerate(traces):
+            ax0 = plt.subplot(gs1[0:6, i*10:i*10+9])
+            plt.title(tr.name)
+            plt.plot(tr.time, tr.gyro, label=tr.name + ' gyro')
+            plt.plot(tr.time, tr.input, label=tr.name + ' loop input')
+            plt.ylabel('degrees/second')
+            ax0.get_yaxis().set_label_coords(-0.1, 0.5)
+            plt.grid()
+            tracelim = np.max([np.abs(tr.gyro),np.abs(tr.input)])
+            plt.ylim([-tracelim*1.1, tracelim*1.1])
+            plt.legend(loc=1)
+            plt.setp(ax0.get_xticklabels(), visible=False)
+
+            ax1 = plt.subplot(gs1[6:8, i*10:i*10+9], sharex=ax0)
+            plt.hlines(tpa_percent, tr.time[0], tr.time[-1], label='tpa', colors='red', alpha=0.5)
+            plt.fill_between(tr.time, 0., tr.throttle, label='throttle', color='grey', alpha=0.2)
+            plt.ylabel('throttle %')
+            ax1.get_yaxis().set_label_coords(-0.1, 0.5)
+            plt.grid()
+            plt.xlim([tr.time[0], tr.time[-1]])
+            plt.ylim([0, 100])
+            plt.legend(loc=1)
+            plt.xlabel('log time in s')
+
+            if style =='raw':
+                ###old raw data plot.
+                plt.setp(ax1.get_xticklabels(), visible=False)
+                ax2 = plt.subplot(gs1[9:16, i*10:i*10+9], sharex=ax0)
+                plt.pcolormesh(tr.avr_t, tr.time_resp, np.transpose(tr.spec_sm), vmin=0, vmax=2.)
+                plt.ylabel('response time in s')
+                ax2.get_yaxis().set_label_coords(-0.1, 0.5)
+                plt.xlabel('log time in s')
+                plt.xlim([tr.avr_t[0], tr.avr_t[-1]])
+
+            else:
+                ###response vs throttle plot. more useful.
+                ax2 = plt.subplot(gs1[9:16, i * 10:i * 10 + 9])
+                plt.title(tr.name + ' response', y=0.88, color='w')
+                plt.pcolormesh(tr.thr_response['throt_scale'], tr.time_resp, tr.thr_response['hist2d_norm'], vmin=0., vmax=2.)
+                plt.ylabel('response time in s')
+                ax2.get_yaxis().set_label_coords(-0.1, 0.5)
+                plt.xlabel('throttle in %')
+                plt.xlim([0.,100.])
+
+
+            theCM = plt.cm.get_cmap('Blues')
+            theCM._init()
+            alphas = np.abs(np.linspace(0., 0.5, theCM.N, dtype=np.float64))
+            theCM._lut[:-3,-1] = alphas
+            ax3 = plt.subplot(gs1[17:, i*10:i*10+9])
+            plt.contourf(*tr.resp_low[2], cmap=theCM, linestyles=None, antialiased=True, levels=np.linspace(0,1,20, dtype=np.float64))
+            plt.plot(tr.time_resp, tr.resp_low[0],
+                     label=tr.name + ' step response ' + '(<' + str(int(Trace.threshold)) + ') '
+                           + pid_labels[tr.name])
+
+
+            if tr.high_mask.sum() > 0:
+                theCM = plt.cm.get_cmap('Oranges')
+                theCM._init()
+                alphas = np.abs(np.linspace(0., 0.5, theCM.N, dtype=np.float64))
+                theCM._lut[:-3,-1] = alphas
+                plt.contourf(*tr.resp_high[2], cmap=theCM, linestyles=None, antialiased=True, levels=np.linspace(0,1,20, dtype=np.float64))
+                plt.plot(tr.time_resp, tr.resp_high[0],
+                     label=tr.name + ' step response ' + '(>' + str(int(Trace.threshold)) + ') '
+                           + pid_labels[tr.name])
+            plt.xlim([-0.001,0.501])
+
+
+            plt.legend(loc=1)
+            plt.ylim([0., 2])
+            plt.ylabel('strength')
+            ax3.get_yaxis().set_label_coords(-0.1, 0.5)
+            plt.xlabel('response time in s')
+
+            plt.grid()
+
+        meanfreq = 1./(traces[0].time[1]-traces[0].time[0])
+        ax4 = plt.subplot(gs1[12, -1])
+        if self.headdict is not None:
+            t = Version+" | Betaflight: Version "+self.headdict['version']+' | Craftname: '+self.headdict['craftName']+\
+                ' | meanFreq: '+str(int(meanfreq))+' | rcRate/Expo: '+self.headdict['rcRate']+'/'+ self.headdict['rcExpo']+'\nrcYawRate/Expo: '+self.headdict['rcYawRate']+'/' \
+                +self.headdict['rcYawExpo']+' | deadBand: '+self.headdict['deadBand']+' | yawDeadBand: '+self.headdict['yawDeadBand'] \
+                +' | Throttle min/tpa/max: ' + self.headdict['minThrottle']+'/'+self.headdict['tpa_breakpoint']+'/'+self.headdict['maxThrottle'] \
+                + ' | dynThrPID: ' + self.headdict['dynThrottle']+ '| D-TermSP: ' + self.headdict['dTermSetPoint']+'| vbatComp: ' + self.headdict['vbatComp']
+
+            plt.text(0, 0, t, ha='left', va='center', rotation=90, color='grey', alpha=0.5, fontsize=textsize)
+        ax4.axis('off')
+        logging.info('Saving as image...')
+        plt.savefig(self.file[:-13] + self.name + '_' + str(log_number)+'_response.png')
+        return fig
+
+
 class CSV_log:
 
     def __init__(self, fpath, name, headdict, noise_bounds):
@@ -368,7 +494,8 @@ class CSV_log:
         logging.info('Processing:')
         self.traces = self.find_traces(self.data)
         self.roll, self.pitch, self.yaw = self.__analyze()
-        self.fig_resp = self.plot_all_resp([self.roll, self.pitch, self.yaw])
+        plot = Plot(fpath, name, headdict)
+        self.fig_resp = plot.plot_all_responses([self.roll, self.pitch, self.yaw])
         self.fig_noise = self.plot_all_noise([self.roll, self.pitch, self.yaw],noise_bounds)
 
     def check_lims_list(self,lims):
@@ -577,105 +704,6 @@ class CSV_log:
         plt.savefig(self.file[:-13] + self.name + '_' + str(self.headdict['logNum'])+'_noise.png')
         return fig
 
-
-    def plot_all_resp(self, traces, style='ra'): # style='raw' for response vs. time in color plot
-        textsize = 7
-        titelsize = 10
-        rcParams.update({'font.size': 9})
-        logging.info('Making PID plot...')
-        fig = plt.figure('Response plot: Log number: ' + self.headdict['logNum']+'          '+self.file , figsize=(16, 8))
-        ### gridspec devides window into 24 horizontal, 3*10 vertical fields
-        gs1 = GridSpec(24, 3 * 10, wspace=0.6, hspace=0.7, left=0.04, right=1., bottom=0.05, top=0.97)
-
-        for i, tr in enumerate(traces):
-            ax0 = plt.subplot(gs1[0:6, i*10:i*10+9])
-            plt.title(tr.name)
-            plt.plot(tr.time, tr.gyro, label=tr.name + ' gyro')
-            plt.plot(tr.time, tr.input, label=tr.name + ' loop input')
-            plt.ylabel('degrees/second')
-            ax0.get_yaxis().set_label_coords(-0.1, 0.5)
-            plt.grid()
-            tracelim = np.max([np.abs(tr.gyro),np.abs(tr.input)])
-            plt.ylim([-tracelim*1.1, tracelim*1.1])
-            plt.legend(loc=1)
-            plt.setp(ax0.get_xticklabels(), visible=False)
-
-            ax1 = plt.subplot(gs1[6:8, i*10:i*10+9], sharex=ax0)
-            plt.hlines(self.headdict['tpa_percent'], tr.time[0], tr.time[-1], label='tpa', colors='red', alpha=0.5)
-            plt.fill_between(tr.time, 0., tr.throttle, label='throttle', color='grey', alpha=0.2)
-            plt.ylabel('throttle %')
-            ax1.get_yaxis().set_label_coords(-0.1, 0.5)
-            plt.grid()
-            plt.xlim([tr.time[0], tr.time[-1]])
-            plt.ylim([0, 100])
-            plt.legend(loc=1)
-            plt.xlabel('log time in s')
-
-            if style =='raw':
-                ###old raw data plot.
-                plt.setp(ax1.get_xticklabels(), visible=False)
-                ax2 = plt.subplot(gs1[9:16, i*10:i*10+9], sharex=ax0)
-                plt.pcolormesh(tr.avr_t, tr.time_resp, np.transpose(tr.spec_sm), vmin=0, vmax=2.)
-                plt.ylabel('response time in s')
-                ax2.get_yaxis().set_label_coords(-0.1, 0.5)
-                plt.xlabel('log time in s')
-                plt.xlim([tr.avr_t[0], tr.avr_t[-1]])
-
-            else:
-                ###response vs throttle plot. more useful.
-                ax2 = plt.subplot(gs1[9:16, i * 10:i * 10 + 9])
-                plt.title(tr.name + ' response', y=0.88, color='w')
-                plt.pcolormesh(tr.thr_response['throt_scale'], tr.time_resp, tr.thr_response['hist2d_norm'], vmin=0., vmax=2.)
-                plt.ylabel('response time in s')
-                ax2.get_yaxis().set_label_coords(-0.1, 0.5)
-                plt.xlabel('throttle in %')
-                plt.xlim([0.,100.])
-
-
-            theCM = plt.cm.get_cmap('Blues')
-            theCM._init()
-            alphas = np.abs(np.linspace(0., 0.5, theCM.N, dtype=np.float64))
-            theCM._lut[:-3,-1] = alphas
-            ax3 = plt.subplot(gs1[17:, i*10:i*10+9])
-            plt.contourf(*tr.resp_low[2], cmap=theCM, linestyles=None, antialiased=True, levels=np.linspace(0,1,20, dtype=np.float64))
-            plt.plot(tr.time_resp, tr.resp_low[0],
-                     label=tr.name + ' step response ' + '(<' + str(int(Trace.threshold)) + ') '
-                           + ' PID ' + self.headdict[tr.name + 'PID'])
-
-
-            if tr.high_mask.sum() > 0:
-                theCM = plt.cm.get_cmap('Oranges')
-                theCM._init()
-                alphas = np.abs(np.linspace(0., 0.5, theCM.N, dtype=np.float64))
-                theCM._lut[:-3,-1] = alphas
-                plt.contourf(*tr.resp_high[2], cmap=theCM, linestyles=None, antialiased=True, levels=np.linspace(0,1,20, dtype=np.float64))
-                plt.plot(tr.time_resp, tr.resp_high[0],
-                     label=tr.name + ' step response ' + '(>' + str(int(Trace.threshold)) + ') '
-                           + ' PID ' + self.headdict[tr.name + 'PID'])
-            plt.xlim([-0.001,0.501])
-
-
-            plt.legend(loc=1)
-            plt.ylim([0., 2])
-            plt.ylabel('strength')
-            ax3.get_yaxis().set_label_coords(-0.1, 0.5)
-            plt.xlabel('response time in s')
-
-            plt.grid()
-
-        meanfreq = 1./(traces[0].time[1]-traces[0].time[0])
-        ax4 = plt.subplot(gs1[12, -1])
-        t = Version+" | Betaflight: Version "+self.headdict['version']+' | Craftname: '+self.headdict['craftName']+\
-            ' | meanFreq: '+str(int(meanfreq))+' | rcRate/Expo: '+self.headdict['rcRate']+'/'+ self.headdict['rcExpo']+'\nrcYawRate/Expo: '+self.headdict['rcYawRate']+'/' \
-            +self.headdict['rcYawExpo']+' | deadBand: '+self.headdict['deadBand']+' | yawDeadBand: '+self.headdict['yawDeadBand'] \
-            +' | Throttle min/tpa/max: ' + self.headdict['minThrottle']+'/'+self.headdict['tpa_breakpoint']+'/'+self.headdict['maxThrottle'] \
-            + ' | dynThrPID: ' + self.headdict['dynThrottle']+ '| D-TermSP: ' + self.headdict['dTermSetPoint']+'| vbatComp: ' + self.headdict['vbatComp']
-
-        plt.text(0, 0, t, ha='left', va='center', rotation=90, color='grey', alpha=0.5, fontsize=textsize)
-        ax4.axis('off')
-        logging.info('Saving as image...')
-        plt.savefig(self.file[:-13] + self.name + '_' + str(self.headdict['logNum'])+'_response.png')
-        return fig
 
     def pid_in(self, pval, gyro, pidp):
         pidin = gyro + pval / (0.032029 * pidp)       # 0.032029 is P scaling factor from betaflight
