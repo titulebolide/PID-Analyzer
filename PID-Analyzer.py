@@ -95,21 +95,22 @@ class Trace:
         if self.high_mask.sum()>0:
             self.resp_high = self.weighted_mode_avr(self.spec_sm, self.high_mask*self.toolow_mask, [-1.5,3.5], 1000)
 
-        self.noise_winlen = self.stepcalc(self.time, Trace.noise_framelen)
-        self.noise_stack = self.winstacker({'time':[], 'gyro':[], 'throttle':[], 'd_err':[], 'debug':[]},
-                                           self.noise_winlen, Trace.noise_superpos)
-        self.noise_win = np.hanning(self.noise_winlen)
+        if 'd_err' in self.data:
+            self.noise_winlen = self.stepcalc(self.time, Trace.noise_framelen)
+            self.noise_stack = self.winstacker({'time':[], 'gyro':[], 'throttle':[], 'd_err':[], 'debug':[]},
+                                               self.noise_winlen, Trace.noise_superpos)
+            self.noise_win = np.hanning(self.noise_winlen)
 
-        self.noise_gyro = self.stackspectrum(self.noise_stack['time'],self.noise_stack['throttle'],self.noise_stack['gyro'], self.noise_win)
-        self.noise_d = self.stackspectrum(self.noise_stack['time'], self.noise_stack['throttle'], self.noise_stack['d_err'], self.noise_win)
-        self.noise_debug = self.stackspectrum(self.noise_stack['time'], self.noise_stack['throttle'], self.noise_stack['debug'], self.noise_win)
-        if self.noise_debug['hist2d'].sum()>0:
-            ## mask 0 entries
-            thr_mask = self.noise_gyro['throt_hist_avr'].clip(0,1)
-            self.filter_trans = np.average(self.noise_gyro['hist2d'], axis=1, weights=thr_mask)/\
-                                np.average(self.noise_debug['hist2d'], axis=1, weights=thr_mask)
-        else:
-            self.filter_trans = self.noise_gyro['hist2d'].mean(axis=1)*0.
+            self.noise_gyro = self.stackspectrum(self.noise_stack['time'],self.noise_stack['throttle'],self.noise_stack['gyro'], self.noise_win)
+            self.noise_d = self.stackspectrum(self.noise_stack['time'], self.noise_stack['throttle'], self.noise_stack['d_err'], self.noise_win)
+            self.noise_debug = self.stackspectrum(self.noise_stack['time'], self.noise_stack['throttle'], self.noise_stack['debug'], self.noise_win)
+            if self.noise_debug['hist2d'].sum()>0:
+                ## mask 0 entries
+                thr_mask = self.noise_gyro['throt_hist_avr'].clip(0,1)
+                self.filter_trans = np.average(self.noise_gyro['hist2d'], axis=1, weights=thr_mask)/\
+                                    np.average(self.noise_debug['hist2d'], axis=1, weights=thr_mask)
+            else:
+                self.filter_trans = self.noise_gyro['hist2d'].mean(axis=1)*0.
 
     @staticmethod
     def low_high_mask(signal, threshold):
