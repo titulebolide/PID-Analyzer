@@ -6,6 +6,7 @@ import subprocess
 import time
 import numpy as np
 from pandas import read_csv
+from pyulog import ULog
 from  matplotlib import rcParams
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
@@ -981,9 +982,60 @@ class BB_log:
                 os.remove(bbl_session)
         return loglist
 
+class PX4_log:
+    def __init__(self, log_file_path, name, show, noise_bounds):
+        self.name = name
+        self.show=show
+        self.noise_bounds=noise_bounds
+
+        msg_filter = ['sensor_combined', 'vehicle_rates_setpoint', 'actuator_controls_0']
+        ulog = ULog(log_file_path, msg_filter)
+
+        data = ulog.data_list
+
+        logging.info('Processing:')
+
+        def resample(time, data, desired_time):
+            data_f = interp1d(time, data, fill_value='extrapolate')
+            return data_f(desired_time)
+
+        sensor_combined = ulog.get_dataset('sensor_combined')
+        time = sensor_combined.data['timestamp']
+
+        vehicle_rates_setpoint = ulog.get_dataset('vehicle_rates_setpoint')
+        actuator_controls_0 = ulog.get_dataset('actuator_controls_0')
+        throttle = resample(actuator_controls_0.data['timestamp'],
+                actuator_controls_0.data['control[3]'] * 100, time)
+
+        index = 0
+        traces = []
+        time_seconds = time / 1e6
+        for axis in ['roll', 'pitch', 'yaw']:
+            gyro_rate = np.rad2deg(sensor_combined.data['gyro_rad['+str(index)+']'])
+            setpoint = resample(vehicle_rates_setpoint.data['timestamp'],
+                    np.rad2deg(vehicle_rates_setpoint.data[axis]), time)
+            traces.append(Trace(axis, time_seconds, gyro_rate, setpoint, throttle))
+            index += 1
+        plot = Plot(log_file_path, os.path.basename(log_file_path))
+        self.fig_resp = plot.plot_all_responses(traces)
+
 
 def run_analysis(log_file_path, plot_name, blackbox_decode, show, noise_bounds):
-    test = BB_log(log_file_path, plot_name, blackbox_decode, show, noise_bounds)
+    if log_file_path.lower().endswith(".ulg"):
+        # PX4 log file
+        test = PX4_log(log_file_path, plot_name, show, noise_bounds)
+    else:
+        # assume Blackbox log file
+        blackbox_decode_path = clean_path(blackbox_decode)
+        if not os.path.isfile(blackbox_decode_path):
+            raise Exception(
+                ('Could not find Blackbox_decode.exe (used to generate CSVs from '
+                 'your BBL file) at %s. You may need to install it from '
+                 'https://github.com/cleanflight/blackbox-tools/releases.')
+                % blackbox_decode_path)
+        logging.info('Decoding with %r' % blackbox_decode_path)
+
+        test = BB_log(log_file_path, plot_name, blackbox_decode, show, noise_bounds)
     logging.info('Analysis complete, showing plot. (Close plot to exit.)')
 
 
@@ -1014,19 +1066,11 @@ if __name__ == "__main__":
     parser.add_argument('-nb', '--noise_bounds', default='[[1.,10.1],[1.,100.],[1.,100.],[0.,4.]]', help='bounds of plots in noise analysis. use "auto" for autoscaling. \n default=[[1.,10.1],[1.,100.],[1.,100.],[0.,4.]]')
     args = parser.parse_args()
 
-    blackbox_decode_path = clean_path(args.blackbox_decode)
     try:
         args.noise_bounds = eval(args.noise_bounds)
 
     except:
         args.noise_bounds = args.noise_bounds
-    if not os.path.isfile(blackbox_decode_path):
-        parser.error(
-            ('Could not find Blackbox_decode.exe (used to generate CSVs from '
-             'your BBL file) at %s. You may need to install it from '
-             'https://github.com/cleanflight/blackbox-tools/releases.')
-            % blackbox_decode_path)
-    logging.info('Decoding with %r' % blackbox_decode_path)
 
     logging.info(Version)
     logging.info('Hello Pilot!')
