@@ -467,6 +467,11 @@ class CSV_log:
                                                       '- LPF only: set debug_mode = GYRO', horizontalalignment='center', verticalalignment = 'center',
                                                       transform = ax1.transAxes,fontdict={'color': 'white'})
 
+             if correctdebugmode == False: # if debug_mode not GYRO_SCALED, display warning
+                ax1.text(0.5, 0.5, 'warning: debug does not contain prefiltered gyro\n'
+                                                      'set debug_mode = GYRO_SCALED', horizontalalignment='center', verticalalignment = 'center',
+                                                      transform = ax1.transAxes,fontdict={'color': 'white'})
+                
             if i<2:
                 # dterm plots
                 ax2 = plt.subplot(gs1[1 + i * 8:1 + i * 8 + 8, 16:23])
@@ -675,6 +680,8 @@ class CSV_log:
     def readcsv(self, fpath):
         logging.info('Reading: Log '+str(self.headdict['logNum']))
         datdic = {}
+        global correctdebugmode
+        
         ### keycheck for 'usecols' only reads usefull traces, uncommend if needed
         wanted =  ['time (us)',
                    'rcCommand[0]', 'rcCommand[1]', 'rcCommand[2]', 'rcCommand[3]',
@@ -693,6 +700,8 @@ class CSV_log:
         datdic.update({'time_us': data['time (us)'].values * 1e-6})
         datdic.update({'throttle': data['rcCommand[3]'].values})
 
+        correctdebugmode = not np.any(data['debug[3]']) # if debug[3] contains data, correctdebugmode is False
+            
         for i in ['0', '1', '2']:
             datdic.update({'rcCommand' + i: data['rcCommand['+i+']'].values})
             #datdic.update({'PID loop in' + i: data['axisP[' + i + ']'].values})
