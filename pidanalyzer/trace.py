@@ -119,7 +119,7 @@ def stackspectrum(time, throttle, trace, window):
     weights = abs(spec.real)
     avr_thr = np.abs(thr).max(axis=1)
 
-    _hist2d = create_hist2d(avr_thr, freq, weights, [101, len(freq) / 4])
+    _hist2d = create_hist2d(avr_thr, freq, weights, [101, int(len(freq) / 4)])
 
     filt_width = 3  # width of gaussian smoothing for hist data
     hist2d_sm = gaussian_filter1d(_hist2d['hist2d_norm'], filt_width, axis=1, mode='constant')
