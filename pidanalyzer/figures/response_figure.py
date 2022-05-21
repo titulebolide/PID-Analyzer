@@ -56,9 +56,15 @@ def create(path: str, name: str, header: dict, traces: List[Trace], old_style: b
             # response vs throttle plot. more useful.
             ax2 = plt.subplot(gs1[9:16, i * 10:i * 10 + 9])
             plt.title(trace.name + ' response', y=0.88, color='w')
-            plt.pcolormesh(trace.thr_response['throt_scale'], trace.time_resp, trace.thr_response['hist2d_norm'],
-                           vmin=0.,
-                           vmax=2.)
+            if 1 == 0:
+                # TypeError: Dimensions of C (478, 101) are incompatible with X (102) and/or Y (478); see help(pcolormesh)
+                plt.pcolormesh(trace.thr_response['throt_scale'], trace.time_resp, trace.thr_response['hist2d_norm'],
+                               vmin=0.,
+                               vmax=2.)
+            else:
+                plt.pcolormesh(trace.thr_response['hist2d_norm'],
+                               vmin=0.,
+                               vmax=2.)
             plt.ylabel('response time in s')
             ax2.get_yaxis().set_label_coords(-0.1, 0.5)
             plt.xlabel('throttle in %')
