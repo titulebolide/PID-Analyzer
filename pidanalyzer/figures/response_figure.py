@@ -56,7 +56,7 @@ def create(path: str, name: str, header: dict, traces: List[Trace], old_style: b
             # response vs throttle plot. more useful.
             ax2 = plt.subplot(gs1[9:16, i * 10:i * 10 + 9])
             plt.title(trace.name + ' response', y=0.88, color='w')
-            plt.pcolormesh(trace.thr_response['throt_scale'], trace.time_resp, trace.thr_response['hist2d_norm'],
+            plt.pcolormesh(trace.thr_response['xscale'][:-1], trace.thr_response['yscale'][:-1], trace.thr_response['hist2d_norm'],
                            vmin=0.,
                            vmax=2.)
             plt.ylabel('response time in s')

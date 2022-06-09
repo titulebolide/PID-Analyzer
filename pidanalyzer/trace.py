@@ -5,23 +5,19 @@ from scipy.optimize import minimize
 
 
 def create_hist2d(x, y, weights, bins):  # bins[nx,ny]
-    """Generates a 2d hist from input 1d axis for x,y. repeats them to match shape of weights X*Y (data points)
-       x will be 0-100%
     """
-    freqs = np.repeat(np.array([y], dtype=np.float64), len(x), axis=0)
-    throts = np.repeat(np.array([x], dtype=np.float64), len(y), axis=0).transpose()
-    throt_hist_avr, throt_scale_avr = np.histogram(x, 101, [0, 100])
-
-    hist2d = np.histogram2d(throts.flatten(), freqs.flatten(),
+    Generates a 2d hist from input 1d axis for x,y, and a 1d hist for x
+    """
+    X,Y = np.meshgrid(x,y)
+    hist2d, xscale, yscale = np.histogram2d(X.transpose().flatten(), Y.transpose().flatten(),
                             range=[[0, 100], [y[0], y[-1]]],
-                            bins=bins, weights=weights.flatten(), normed=False)[0].transpose()
+                            bins=bins, weights=weights.flatten())
+    hist2d = np.abs(hist2d.transpose())
+    xhist = np.histogram(x, bins=bins[0], range=[0, 100])[0]
+    hist2d_norm = np.copy(hist2d) / (xhist + 1e-9)
 
-    hist2d = np.array(abs(hist2d), dtype=np.float64)
-    hist2d_norm = np.copy(hist2d)
-    hist2d_norm /= (throt_hist_avr + 1e-9)
-
-    return {'hist2d_norm': hist2d_norm, 'hist2d': hist2d, 'throt_hist': throt_hist_avr,
-            'throt_scale': throt_scale_avr}
+    return {'hist2d_norm': hist2d_norm, 'hist2d': hist2d, 'xhist': xhist,
+            'xscale': xscale, 'yscale': yscale}
 
 
 def spectrum(time, traces):
@@ -129,7 +125,7 @@ def stackspectrum(time, throttle, trace, window):
     mask = to_mask(freq[:-1:4].clip(thresh - 1e-9, thresh))
     maxval = np.max(hist2d_sm.transpose() * mask)
 
-    return {'throt_hist_avr': _hist2d['throt_hist'], 'throt_axis': _hist2d['throt_scale'], 'freq_axis': freq[::4],
+    return {'throt_hist_avr': _hist2d['xhist'], 'throt_axis': _hist2d['xscale'], 'freq_axis': freq[::4],
             'hist2d_norm': _hist2d['hist2d_norm'], 'hist2d_sm': hist2d_sm, 'hist2d': _hist2d['hist2d'], 'max': maxval}
 
 

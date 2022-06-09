@@ -72,6 +72,8 @@ Flo
 * add config file (`config.ini`) to set the path for `blackbox_decode` permanently
 * use different default names for `blackbox_decode` executable on different platforms
 * changed command-line usage syntax (see below)
+* updated dependencies (matplotlib 3.5, scipy 1.7, pandas 1.3, numpy 1.21)
+* tested on python 3.10
 
 ### Usage
 
