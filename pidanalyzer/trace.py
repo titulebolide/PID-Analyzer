@@ -14,7 +14,7 @@ def create_hist2d(x, y, weights, bins):  # bins[nx,ny]
 
     hist2d = np.histogram2d(throts.flatten(), freqs.flatten(),
                             range=[[0, 100], [y[0], y[-1]]],
-                            bins=bins, weights=weights.flatten(), normed=False)[0].transpose()
+                            bins=bins, weights=weights.flatten(), density=False)[0].transpose()
 
     hist2d = np.array(abs(hist2d), dtype=np.float64)
     hist2d_norm = np.copy(hist2d)
@@ -173,7 +173,7 @@ class Trace:
         self.gyro = self.data['gyro']
         self.throttle = self.data['throttle']
         self.throt_hist, self.throt_scale = np.histogram(self.throttle, np.linspace(0, 100, 101, dtype=np.float64),
-                                                         normed=True)
+                                                         density=True)
 
         self.flen = stepcalc(self.time, Trace.framelen)  # array len corresponding to framelen in s
         self.rlen = stepcalc(self.time, Trace.resplen)  # array len corresponding to resplen in s
