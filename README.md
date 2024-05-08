@@ -40,7 +40,7 @@ The whole thing is still under development and results/input of different and mo
 To install required Python libraries, view the list of packages in `requirements.txt` or simply run:
 
 ```
-sudo apt-get install python3-pip python3-tk
+sudo apt-get install python3-pip
 sudo pip3 install -r requirements.txt
 ```
 
