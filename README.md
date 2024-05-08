@@ -37,11 +37,17 @@ The whole thing is still under development and results/input of different and mo
 
 ## Requirements
 
+### On debian-based distributions
 To install required Python libraries, view the list of packages in `requirements.txt` or simply run:
 
 ```
 sudo apt-get install python3-pip
 sudo pip3 install -r requirements.txt
+```
+
+### On Arch Linux:
+```
+pacman -S python-matplotlib python-numpy python-scipy python-pandas
 ```
 
 ## How to use this program:
