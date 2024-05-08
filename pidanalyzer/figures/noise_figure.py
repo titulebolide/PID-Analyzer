@@ -73,7 +73,7 @@ def create(path: str, name: str, header: dict, traces: List[Trace], lims: list) 
         # gyro plots
         ax0 = plt.subplot(gs1[1 + i * 8:1 + i * 8 + 8, 0:7])
         if len(axes_gyro):
-            axes_gyro[0].get_shared_x_axes().join(axes_gyro[0], ax0)
+            ax0.sharex(axes_gyro[0])
         axes_gyro.append(ax0)
         ax0.set_title('gyro ' + tr.name, y=0.88, color='w')
         pc0 = plt.pcolormesh(tr.noise_gyro['throt_axis'], tr.noise_gyro['freq_axis'],
@@ -99,7 +99,7 @@ def create(path: str, name: str, header: dict, traces: List[Trace], lims: list) 
         # debug plots
         ax1 = plt.subplot(gs1[1 + i * 8:1 + i * 8 + 8, 8:15])
         if len(axes_debug):
-            axes_debug[0].get_shared_x_axes().join(axes_debug[0], ax1)
+            ax1.sharex(axes_debug[0])
         axes_debug.append(ax1)
         ax1.set_title('debug ' + tr.name, y=0.88, color='w')
         pc1 = plt.pcolormesh(tr.noise_debug['throt_axis'], tr.noise_debug['freq_axis'],
@@ -129,7 +129,7 @@ def create(path: str, name: str, header: dict, traces: List[Trace], lims: list) 
             # dterm plots
             ax2 = plt.subplot(gs1[1 + i * 8:1 + i * 8 + 8, 16:23])
             if len(axes_d):
-                axes_d[0].get_shared_x_axes().join(axes_d[0], ax2)
+                ax2.sharex(axes_d[0])
             axes_d.append(ax2)
             ax2.set_title('D-term ' + tr.name, y=0.88, color='w')
             pc2 = plt.pcolormesh(tr.noise_d['throt_axis'], tr.noise_d['freq_axis'], tr.noise_d['hist2d_sm'] + 1.,
@@ -153,7 +153,7 @@ def create(path: str, name: str, header: dict, traces: List[Trace], lims: list) 
             ax22 = plt.subplot(gs1[1 + i * 8 + 5:1 + i * 8 + 8, 16:23])
             ax21.bar(tr.throt_scale[:-1], tr.throt_hist * 100., width=1., align='edge', color='black', alpha=0.2,
                      label='throttle distribution')
-            axes_d[0].get_shared_x_axes().join(axes_d[0], ax21)
+            ax21.sharex(axes_d[0])
             ax21.vlines(header['tpa_percent'], 0., 100., label='tpa', colors='red', alpha=0.5)
             ax21.grid()
             ax21.set_ylim([0., np.max(tr.throt_hist) * 100. * 1.1])
@@ -175,7 +175,7 @@ def create(path: str, name: str, header: dict, traces: List[Trace], lims: list) 
         # transmission plots
         ax3 = plt.subplot(gs1[1 + i * 8:1 + i * 8 + 8, 24:30])
         if len(axes_trans):
-            axes_trans[0].get_shared_x_axes().join(axes_trans[0], ax3)
+            ax3.sharex(axes_trans[0])
         axes_trans.append(ax3)
         ax3.fill_between(tr.noise_gyro['freq_axis'][:-1], 0, meanspec[i], label=tr.name + ' gyro noise', alpha=0.2)
         ax3.set_ylim(lims[3])
